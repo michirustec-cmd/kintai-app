@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const { getDb, queryAll, queryOne, runAndSave, lastInsertId } = require('./db');
 const { generateExcel } = require('./excel');
 
@@ -227,6 +228,14 @@ app.put('/api/settings', (req, res) => {
     runAndSave('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, String(value)]);
   }
   res.json({ success: true });
+});
+
+// ========== Backup ==========
+app.get('/api/backups', (req, res) => {
+  const backupDir = path.join(__dirname, '..', 'backups');
+  if (!fs.existsSync(backupDir)) return res.json([]);
+  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('kintai_backup_')).sort().reverse();
+  res.json(files);
 });
 
 // ========== Excel Export ==========

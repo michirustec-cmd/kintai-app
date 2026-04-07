@@ -3,20 +3,63 @@ const fs = require('fs');
 const path = require('path');
 
 const dbPath = path.join(__dirname, '..', 'kintai.db');
+const backupDir = path.join(__dirname, '..', 'backups');
 
 let db = null;
+
+// 起動時にDBのバックアップを保存
+function backupDatabase() {
+  if (!fs.existsSync(dbPath)) return;
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+  const backupPath = path.join(backupDir, `kintai_backup_${timestamp}.db`);
+  fs.copyFileSync(dbPath, backupPath);
+  console.log(`  バックアップ保存: ${backupPath}`);
+
+  // 古いバックアップを10件まで保持（それ以上は削除）
+  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('kintai_backup_')).sort();
+  while (files.length > 10) {
+    const old = files.shift();
+    fs.unlinkSync(path.join(backupDir, old));
+  }
+}
+
+// バックアップから復元
+function restoreFromLatestBackup(SQL) {
+  if (!fs.existsSync(backupDir)) return null;
+  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('kintai_backup_')).sort();
+  if (files.length === 0) return null;
+  const latest = files[files.length - 1];
+  const backupPath = path.join(backupDir, latest);
+  console.log(`  バックアップから復元: ${latest}`);
+  const fileBuffer = fs.readFileSync(backupPath);
+  return new SQL.Database(fileBuffer);
+}
 
 async function getDb() {
   if (db) return db;
 
   const SQL = await initSqlJs();
 
+  // 起動時に既存DBをバックアップ
+  backupDatabase();
+
   // Load existing DB or create new
   if (fs.existsSync(dbPath)) {
     const fileBuffer = fs.readFileSync(dbPath);
     db = new SQL.Database(fileBuffer);
   } else {
-    db = new SQL.Database();
+    // DBがない場合、バックアップから復元を試みる
+    const restored = restoreFromLatestBackup(SQL);
+    if (restored) {
+      db = restored;
+      // 復元したDBを保存
+      const data = db.export();
+      fs.writeFileSync(dbPath, Buffer.from(data));
+    } else {
+      db = new SQL.Database();
+    }
   }
 
   db.run('PRAGMA foreign_keys = ON');
