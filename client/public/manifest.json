@@ -1,0 +1,18 @@
+{
+  "name": "勤怠管理",
+  "short_name": "勤怠",
+  "description": "勤怠管理アプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2c3e50",
+  "theme_color": "#2c3e50",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
