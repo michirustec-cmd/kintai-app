@@ -45,6 +45,7 @@ async function getDb() {
       start_time TEXT NOT NULL,
       end_time TEXT NOT NULL,
       break_minutes INTEGER DEFAULT 60,
+      day_type TEXT DEFAULT 'work',
       note TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY (employee_id) REFERENCES employees(id)

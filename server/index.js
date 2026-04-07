@@ -32,6 +32,10 @@ function getSettings() {
 }
 
 function calcRecord(r, settings) {
+  // 休み・全休の場合は計算不要
+  if (r.day_type === 'off' || r.day_type === 'alloff') {
+    return { ...r, work_minutes: 0, early_minutes: 0, overtime_minutes: 0, extra_total_minutes: 0 };
+  }
   const start = toMin(r.start_time);
   let end = toMin(r.end_time);
   const { standardStart, standardEnd, standardHours, defaultBreak } = settings;
@@ -185,22 +189,22 @@ app.get('/api/records/summary', (req, res) => {
 });
 
 app.post('/api/records', (req, res) => {
-  const { employee_id, date, site, start_time, end_time, break_minutes, note } = req.body;
-  if (!employee_id || !date || !site || !start_time || !end_time) {
+  const { employee_id, date, site, start_time, end_time, break_minutes, note, day_type } = req.body;
+  if (!employee_id || !date) {
     return res.status(400).json({ error: '必須項目を入力してください' });
   }
   runAndSave(
-    'INSERT INTO records (employee_id, date, site, start_time, end_time, break_minutes, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [Number(employee_id), date, site.trim(), start_time, end_time, break_minutes ?? 90, note || '']
+    'INSERT INTO records (employee_id, date, site, start_time, end_time, break_minutes, day_type, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [Number(employee_id), date, site || '', start_time || '00:00', end_time || '00:00', break_minutes ?? 90, day_type || 'work', note || '']
   );
   res.json({ id: lastInsertId() });
 });
 
 app.put('/api/records/:id', (req, res) => {
-  const { date, site, start_time, end_time, break_minutes, note } = req.body;
+  const { date, site, start_time, end_time, break_minutes, note, day_type } = req.body;
   runAndSave(
-    'UPDATE records SET date = ?, site = ?, start_time = ?, end_time = ?, break_minutes = ?, note = ? WHERE id = ?',
-    [date, site, start_time, end_time, break_minutes ?? 90, note || '', Number(req.params.id)]
+    'UPDATE records SET date = ?, site = ?, start_time = ?, end_time = ?, break_minutes = ?, day_type = ?, note = ? WHERE id = ?',
+    [date, site, start_time, end_time, break_minutes ?? 90, day_type || 'work', note || '', Number(req.params.id)]
   );
   res.json({ success: true });
 });

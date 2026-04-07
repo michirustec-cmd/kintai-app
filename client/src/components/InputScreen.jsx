@@ -4,10 +4,16 @@ import { todayISO } from '../utils/time';
 import BottomNav from './BottomNav';
 
 const DISTRICTS = ['A地区', 'B地区', 'C地区', 'その他'];
+const DAY_TYPES = [
+  { value: 'work', label: '出勤' },
+  { value: 'off', label: '休み' },
+  { value: 'alloff', label: '全休' },
+];
 
 export default function InputScreen({ user, editingRecord, onSaved, onNavigate, onLogout, toast }) {
   const [sites, setSites] = useState([]);
   const [date, setDate] = useState(todayISO());
+  const [dayType, setDayType] = useState('work');
   const [district, setDistrict] = useState('A地区');
   const [site, setSite] = useState('');
   const [startTime, setStartTime] = useState('08:00');
@@ -23,6 +29,7 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
   useEffect(() => {
     if (editingRecord) {
       setDate(editingRecord.date);
+      setDayType(editingRecord.day_type || 'work');
       setSite(editingRecord.site);
       setStartTime(editingRecord.start_time);
       setEndTime(editingRecord.end_time);
@@ -35,6 +42,7 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
 
   function resetForm() {
     setDate(todayISO());
+    setDayType('work');
     setSite('');
     setStartTime('08:00');
     setEndTime('17:30');
@@ -64,19 +72,28 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
   }
 
   async function handleSave() {
-    if (!date || !site.trim() || !startTime || !endTime) {
+    if (dayType === 'work' && (!date || !site.trim() || !startTime || !endTime)) {
       toast('日付・現場名・勤務時間を入力してください', 'error');
       return;
     }
+    if (dayType !== 'work' && !date) {
+      toast('日付を入力してください', 'error');
+      return;
+    }
+    const dayLabel = dayType === 'off' ? '休み' : dayType === 'alloff' ? '全休' : '';
+    const saveSite = dayType === 'work' ? site.trim() : dayLabel;
+    const saveStart = dayType === 'work' ? startTime : '00:00';
+    const saveEnd = dayType === 'work' ? endTime : '00:00';
+    const saveBreak = dayType === 'work' ? breakMin : 0;
     try {
       if (editingRecord) {
         await updateRecord(editingRecord.id, {
-          date, site: site.trim(), start_time: startTime, end_time: endTime, break_minutes: breakMin, note,
+          date, site: saveSite, start_time: saveStart, end_time: saveEnd, break_minutes: saveBreak, note, day_type: dayType,
         });
         toast('勤務を更新しました');
       } else {
         await addRecord({
-          employee_id: user.id, date, site: site.trim(), start_time: startTime, end_time: endTime, break_minutes: breakMin, note,
+          employee_id: user.id, date, site: saveSite, start_time: saveStart, end_time: saveEnd, break_minutes: saveBreak, note, day_type: dayType,
         });
         toast('保存しました');
       }
@@ -95,6 +112,27 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
       </header>
 
       <div className="p-4 max-w-lg mx-auto">
+        {/* 出勤/休み切替 */}
+        <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            {DAY_TYPES.map((t) => (
+              <button
+                key={t.value}
+                onClick={() => setDayType(t.value)}
+                className={`flex-1 py-2.5 rounded-md text-sm font-semibold transition-colors ${
+                  dayType === t.value
+                    ? t.value === 'work' ? 'bg-primary text-white shadow-sm'
+                    : t.value === 'off' ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-gray-600 text-white shadow-sm'
+                    : 'text-gray-500'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* 日付 */}
         <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
           <h2 className="text-sm text-gray-400 mb-2 font-medium">日付</h2>
@@ -107,7 +145,7 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
         </div>
 
         {/* 地区・現場名 */}
-        <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
+        {dayType === 'work' && <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
           <h2 className="text-sm text-gray-400 mb-2 font-medium">地区</h2>
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-3">
             {DISTRICTS.map((d) => (
@@ -160,10 +198,10 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
               登録
             </button>
           </div>
-        </div>
+        </div>}
 
         {/* 勤務時間 */}
-        <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
+        {dayType === 'work' && <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
           <h2 className="text-sm text-gray-400 mb-2 font-medium">勤務時間</h2>
           <div className="flex gap-3">
             <div className="flex-1">
@@ -185,7 +223,17 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
               />
             </div>
           </div>
-        </div>
+        </div>}
+
+        {/* 休み・全休メッセージ */}
+        {dayType !== 'work' && (
+          <div className="bg-white rounded-xl p-6 mb-4 shadow-sm text-center">
+            <div className="text-4xl mb-2">{dayType === 'off' ? '🏖️' : '📅'}</div>
+            <div className="text-lg font-semibold text-gray-600">
+              {dayType === 'off' ? '休み' : '全休'}として記録します
+            </div>
+          </div>
+        )}
 
         {/* 備考 */}
         <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
