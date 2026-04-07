@@ -1,67 +1,41 @@
-const initSqlJs = require('sql.js');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-const dbPath = path.join(__dirname, '..', 'kintai.db');
-
-let db = null;
-
-// 安全に列を追加（既にあればスキップ）
-function addColumnIfNotExists(table, column, type) {
-  try {
-    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-    console.log(`  列を追加: ${table}.${column}`);
-  } catch (e) {
-    // 既に存在する場合は無視
-  }
-}
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('render.com') ? { rejectUnauthorized: false } : false,
+});
 
 async function getDb() {
-  if (db) return db;
-
-  const SQL = await initSqlJs();
-
-  // Load existing DB or create new
-  if (fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(fileBuffer);
-    console.log('  既存のDBを読み込みました');
-  } else {
-    db = new SQL.Database();
-    console.log('  新規DBを作成しました');
-  }
-
-  db.run('PRAGMA foreign_keys = ON');
-
-  // Create tables (IF NOT EXISTS なので既存データは消えない)
-  db.run(`
+  // Create tables
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS employees (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       sort_order INTEGER DEFAULT 0
     )
   `);
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS sites (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      district TEXT DEFAULT 'A地区'
     )
   `);
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS records (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      employee_id INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY,
+      employee_id INTEGER NOT NULL REFERENCES employees(id),
       date TEXT NOT NULL,
       site TEXT NOT NULL,
       start_time TEXT NOT NULL,
       end_time TEXT NOT NULL,
       break_minutes INTEGER DEFAULT 60,
+      day_type TEXT DEFAULT 'work',
       note TEXT DEFAULT '',
-      created_at TEXT DEFAULT (datetime('now', 'localtime')),
-      FOREIGN KEY (employee_id) REFERENCES employees(id)
+      created_at TIMESTAMP DEFAULT NOW()
     )
   `);
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -69,22 +43,29 @@ async function getDb() {
   `);
 
   // マイグレーション: 新しい列を安全に追加
-  addColumnIfNotExists('sites', 'district', "TEXT DEFAULT 'A地区'");
-  addColumnIfNotExists('records', 'day_type', "TEXT DEFAULT 'work'");
-
-  // Insert default data if empty
-  const empCount = db.exec("SELECT COUNT(*) as c FROM employees")[0].values[0][0];
-  if (empCount === 0) {
-    ['田中', '佐藤', '鈴木', '山田'].forEach((name, i) => {
-      db.run('INSERT INTO employees (name, sort_order) VALUES (?, ?)', [name, i]);
-    });
+  const migrations = [
+    "ALTER TABLE sites ADD COLUMN IF NOT EXISTS district TEXT DEFAULT 'A地区'",
+    "ALTER TABLE records ADD COLUMN IF NOT EXISTS day_type TEXT DEFAULT 'work'",
+  ];
+  for (const sql of migrations) {
+    try { await pool.query(sql); } catch (e) { /* already exists */ }
   }
 
-  const siteCount = db.exec("SELECT COUNT(*) as c FROM sites")[0].values[0][0];
-  if (siteCount === 0) {
-    ['A邸', 'B邸', 'C邸', 'D社ビル', '公共施設'].forEach(name => {
-      db.run('INSERT INTO sites (name) VALUES (?)', [name]);
-    });
+  // Insert default data if empty
+  const empCount = await pool.query('SELECT COUNT(*) as c FROM employees');
+  if (parseInt(empCount.rows[0].c) === 0) {
+    const names = ['田中', '佐藤', '鈴木', '山田'];
+    for (let i = 0; i < names.length; i++) {
+      await pool.query('INSERT INTO employees (name, sort_order) VALUES ($1, $2)', [names[i], i]);
+    }
+  }
+
+  const siteCount = await pool.query('SELECT COUNT(*) as c FROM sites');
+  if (parseInt(siteCount.rows[0].c) === 0) {
+    const sites = ['A邸', 'B邸', 'C邸', 'D社ビル', '公共施設'];
+    for (const name of sites) {
+      await pool.query('INSERT INTO sites (name) VALUES ($1)', [name]);
+    }
   }
 
   // Upsert default settings
@@ -95,47 +76,37 @@ async function getDb() {
     default_break: '90',
   };
   for (const [key, value] of Object.entries(defaultSettings)) {
-    db.run("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", [key, value]);
+    await pool.query(
+      'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING',
+      [key, value]
+    );
   }
 
-  saveDb();
-  return db;
-}
-
-function saveDb() {
-  if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(dbPath, buffer);
+  console.log('  データベース初期化完了');
+  return pool;
 }
 
 // Helper: run query and return array of objects
-function queryAll(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return rows;
+async function queryAll(sql, params = []) {
+  const result = await pool.query(sql, params);
+  return result.rows;
 }
 
-// Helper: run query and return first row as object
-function queryOne(sql, params = []) {
-  const rows = queryAll(sql, params);
-  return rows.length > 0 ? rows[0] : null;
+// Helper: run query and return first row
+async function queryOne(sql, params = []) {
+  const result = await pool.query(sql, params);
+  return result.rows.length > 0 ? result.rows[0] : null;
 }
 
-// Helper: run INSERT/UPDATE/DELETE and save
-function runAndSave(sql, params = []) {
-  db.run(sql, params);
-  saveDb();
+// Helper: run INSERT/UPDATE/DELETE
+async function runAndSave(sql, params = []) {
+  await pool.query(sql, params);
 }
 
-// Helper: get last insert rowid
-function lastInsertId() {
-  return db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+// Helper: run INSERT and return id
+async function insertAndGetId(sql, params = []) {
+  const result = await pool.query(sql + ' RETURNING id', params);
+  return result.rows[0].id;
 }
 
-module.exports = { getDb, saveDb, queryAll, queryOne, runAndSave, lastInsertId };
+module.exports = { getDb, queryAll, queryOne, runAndSave, insertAndGetId };
