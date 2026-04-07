@@ -165,17 +165,6 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
               />
             </div>
           </div>
-          <div className="mt-3">
-            <label className="block text-xs text-gray-500 mb-1">休憩（分）</label>
-            <input
-              type="number"
-              value={breakMin}
-              onChange={(e) => setBreakMin(Number(e.target.value))}
-              min="0"
-              step="15"
-              className="w-24 p-2.5 border border-gray-200 rounded-lg text-base focus:outline-none focus:border-primary"
-            />
-          </div>
         </div>
 
         {/* 備考 */}
