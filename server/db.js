@@ -3,38 +3,17 @@ const fs = require('fs');
 const path = require('path');
 
 const dbPath = path.join(__dirname, '..', 'kintai.db');
-const backupDir = path.join(__dirname, '..', 'backups');
 
 let db = null;
 
-// 起動時にDBのバックアップを保存
-function backupDatabase() {
-  if (!fs.existsSync(dbPath)) return;
-  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
-  const now = new Date();
-  const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
-  const backupPath = path.join(backupDir, `kintai_backup_${timestamp}.db`);
-  fs.copyFileSync(dbPath, backupPath);
-  console.log(`  バックアップ保存: ${backupPath}`);
-
-  // 古いバックアップを10件まで保持（それ以上は削除）
-  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('kintai_backup_')).sort();
-  while (files.length > 10) {
-    const old = files.shift();
-    fs.unlinkSync(path.join(backupDir, old));
+// 安全に列を追加（既にあればスキップ）
+function addColumnIfNotExists(table, column, type) {
+  try {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    console.log(`  列を追加: ${table}.${column}`);
+  } catch (e) {
+    // 既に存在する場合は無視
   }
-}
-
-// バックアップから復元
-function restoreFromLatestBackup(SQL) {
-  if (!fs.existsSync(backupDir)) return null;
-  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('kintai_backup_')).sort();
-  if (files.length === 0) return null;
-  const latest = files[files.length - 1];
-  const backupPath = path.join(backupDir, latest);
-  console.log(`  バックアップから復元: ${latest}`);
-  const fileBuffer = fs.readFileSync(backupPath);
-  return new SQL.Database(fileBuffer);
 }
 
 async function getDb() {
@@ -42,29 +21,19 @@ async function getDb() {
 
   const SQL = await initSqlJs();
 
-  // 起動時に既存DBをバックアップ
-  backupDatabase();
-
   // Load existing DB or create new
   if (fs.existsSync(dbPath)) {
     const fileBuffer = fs.readFileSync(dbPath);
     db = new SQL.Database(fileBuffer);
+    console.log('  既存のDBを読み込みました');
   } else {
-    // DBがない場合、バックアップから復元を試みる
-    const restored = restoreFromLatestBackup(SQL);
-    if (restored) {
-      db = restored;
-      // 復元したDBを保存
-      const data = db.export();
-      fs.writeFileSync(dbPath, Buffer.from(data));
-    } else {
-      db = new SQL.Database();
-    }
+    db = new SQL.Database();
+    console.log('  新規DBを作成しました');
   }
 
   db.run('PRAGMA foreign_keys = ON');
 
-  // Create tables
+  // Create tables (IF NOT EXISTS なので既存データは消えない)
   db.run(`
     CREATE TABLE IF NOT EXISTS employees (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,8 +44,7 @@ async function getDb() {
   db.run(`
     CREATE TABLE IF NOT EXISTS sites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      district TEXT DEFAULT 'A地区'
+      name TEXT NOT NULL UNIQUE
     )
   `);
   db.run(`
@@ -88,7 +56,6 @@ async function getDb() {
       start_time TEXT NOT NULL,
       end_time TEXT NOT NULL,
       break_minutes INTEGER DEFAULT 60,
-      day_type TEXT DEFAULT 'work',
       note TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY (employee_id) REFERENCES employees(id)
@@ -100,6 +67,10 @@ async function getDb() {
       value TEXT NOT NULL
     )
   `);
+
+  // マイグレーション: 新しい列を安全に追加
+  addColumnIfNotExists('sites', 'district', "TEXT DEFAULT 'A地区'");
+  addColumnIfNotExists('records', 'day_type', "TEXT DEFAULT 'work'");
 
   // Insert default data if empty
   const empCount = db.exec("SELECT COUNT(*) as c FROM employees")[0].values[0][0];
@@ -116,7 +87,7 @@ async function getDb() {
     });
   }
 
-  // Upsert default settings (add missing keys without overwriting existing)
+  // Upsert default settings
   const defaultSettings = {
     standard_hours: '8',
     standard_start: '08:00',

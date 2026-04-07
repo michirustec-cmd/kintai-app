@@ -230,13 +230,6 @@ app.put('/api/settings', (req, res) => {
   res.json({ success: true });
 });
 
-// ========== Backup ==========
-app.get('/api/backups', (req, res) => {
-  const backupDir = path.join(__dirname, '..', 'backups');
-  if (!fs.existsSync(backupDir)) return res.json([]);
-  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('kintai_backup_')).sort().reverse();
-  res.json(files);
-});
 
 // ========== Excel Export ==========
 app.get('/api/export', (req, res) => {
