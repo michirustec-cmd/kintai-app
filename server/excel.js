@@ -19,6 +19,10 @@ function toMin(t) {
 }
 
 function calcRow(r, settings) {
+  // 休み・全休の場合は全て0
+  if (r.day_type === 'off' || r.day_type === 'alloff') {
+    return { workMinutes: 0, earlyMinutes: 0, overtimeMinutes: 0, breakMin: 0, isOff: true };
+  }
   const start = toMin(r.start_time);
   let end = toMin(r.end_time);
   const breakMin = r.break_minutes != null ? r.break_minutes : settings.defaultBreak;
@@ -29,7 +33,7 @@ function calcRow(r, settings) {
   const workMinutes = (end - start) - breakMin;
   const earlyMinutes = Math.max(0, settings.standardStart - start);
   const overtimeMinutes = Math.max(0, end - settings.standardEnd);
-  return { workMinutes, earlyMinutes, overtimeMinutes, breakMin };
+  return { workMinutes, earlyMinutes, overtimeMinutes, breakMin, isOff: false };
 }
 
 function generateExcel(records, employeeName, yearMonth, settings) {
@@ -61,13 +65,30 @@ function generateExcel(records, employeeName, yearMonth, settings) {
   // --- 社員ごとに個別シートを作成 ---
   employeeNames.forEach(name => {
     const empRecords = grouped[name];
-    let totalWork = 0, totalEarly = 0, totalOt = 0;
+    let totalWork = 0, totalEarly = 0, totalOt = 0, workDays = 0;
 
     const data = empRecords.map(r => {
       const c = calcRow(r, settings);
-      totalWork += c.workMinutes;
-      totalEarly += c.earlyMinutes;
-      totalOt += c.overtimeMinutes;
+      if (!c.isOff) {
+        totalWork += c.workMinutes;
+        totalEarly += c.earlyMinutes;
+        totalOt += c.overtimeMinutes;
+        workDays++;
+      }
+
+      if (c.isOff) {
+        return {
+          '日付': r.date,
+          '現場名': r.site,
+          '出勤': '',
+          '退勤': '',
+          '実労働': '',
+          '早出': '',
+          '残業': '',
+          '時間外計': '',
+          '備考': r.note || '',
+        };
+      }
 
       return {
         '日付': r.date,
@@ -86,7 +107,7 @@ function generateExcel(records, employeeName, yearMonth, settings) {
     data.push({});
     data.push({
       '日付': '【合計】',
-      '現場名': `${empRecords.length}日出勤`,
+      '現場名': `${workDays}日出勤`,
       '出勤': '',
       '退勤': '',
       '実労働': fmtH(totalWork),
@@ -106,7 +127,7 @@ function generateExcel(records, employeeName, yearMonth, settings) {
     // サマリー用に集計を記録
     summaryRows.push({
       '社員名': name,
-      '出勤日数': empRecords.length,
+      '出勤日数': workDays,
       '総労働時間': fmtH(totalWork),
       '早出合計': fmtH(totalEarly),
       '残業合計': fmtH(totalOt),
@@ -123,9 +144,11 @@ function generateExcel(records, employeeName, yearMonth, settings) {
     });
     records.forEach(r => {
       const c = calcRow(r, settings);
-      grandWork += c.workMinutes;
-      grandEarly += c.earlyMinutes;
-      grandOt += c.overtimeMinutes;
+      if (!c.isOff) {
+        grandWork += c.workMinutes;
+        grandEarly += c.earlyMinutes;
+        grandOt += c.overtimeMinutes;
+      }
     });
 
     summaryRows.push({});
