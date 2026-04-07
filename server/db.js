@@ -32,7 +32,8 @@ async function getDb() {
   db.run(`
     CREATE TABLE IF NOT EXISTS sites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
+      name TEXT NOT NULL UNIQUE,
+      district TEXT DEFAULT 'A地区'
     )
   `);
   db.run(`

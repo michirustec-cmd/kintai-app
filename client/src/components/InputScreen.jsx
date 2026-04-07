@@ -3,9 +3,12 @@ import { getSites, addSite as apiAddSite, addRecord, updateRecord } from '../api
 import { todayISO } from '../utils/time';
 import BottomNav from './BottomNav';
 
+const DISTRICTS = ['A地区', 'B地区', 'C地区', 'その他'];
+
 export default function InputScreen({ user, editingRecord, onSaved, onNavigate, onLogout, toast }) {
   const [sites, setSites] = useState([]);
   const [date, setDate] = useState(todayISO());
+  const [district, setDistrict] = useState('A地区');
   const [site, setSite] = useState('');
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('17:30');
@@ -51,7 +54,7 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
   async function handleAddSite() {
     if (!newSiteName.trim()) return;
     try {
-      await apiAddSite(newSiteName.trim());
+      await apiAddSite(newSiteName.trim(), district);
       setNewSiteName('');
       loadSites();
       toast('現場名を登録しました');
@@ -103,11 +106,28 @@ export default function InputScreen({ user, editingRecord, onSaved, onNavigate, 
           />
         </div>
 
-        {/* 現場名 */}
+        {/* 地区・現場名 */}
         <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
+          <h2 className="text-sm text-gray-400 mb-2 font-medium">地区</h2>
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-3">
+            {DISTRICTS.map((d) => (
+              <button
+                key={d}
+                onClick={() => setDistrict(d)}
+                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
+                  district === d
+                    ? 'bg-white text-header shadow-sm'
+                    : 'text-gray-500'
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+
           <h2 className="text-sm text-gray-400 mb-2 font-medium">現場名</h2>
           <div className="flex flex-wrap gap-2 mb-2.5">
-            {sites.map((s) => (
+            {sites.filter((s) => s.district === district || (!s.district && district === 'A地区')).map((s) => (
               <button
                 key={s.id}
                 onClick={() => setSite(s.name)}

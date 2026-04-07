@@ -35,7 +35,7 @@ export const deleteEmployee = (id) => request(`/employees/${id}`, { method: 'DEL
 
 // Sites
 export const getSites = () => request('/sites');
-export const addSite = (name) => request('/sites', { method: 'POST', body: JSON.stringify({ name }) });
+export const addSite = (name, district) => request('/sites', { method: 'POST', body: JSON.stringify({ name, district }) });
 export const deleteSite = (id) => request(`/sites/${id}`, { method: 'DELETE' });
 
 // Records

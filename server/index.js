@@ -93,16 +93,16 @@ app.delete('/api/employees/:id', (req, res) => {
 
 // ========== Sites ==========
 app.get('/api/sites', (req, res) => {
-  const rows = queryAll('SELECT * FROM sites ORDER BY id');
+  const rows = queryAll('SELECT * FROM sites ORDER BY district, id');
   res.json(rows);
 });
 
 app.post('/api/sites', (req, res) => {
-  const { name } = req.body;
+  const { name, district } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: '現場名は必須です' });
   try {
-    runAndSave('INSERT INTO sites (name) VALUES (?)', [name.trim()]);
-    res.json({ id: lastInsertId(), name: name.trim() });
+    runAndSave('INSERT INTO sites (name, district) VALUES (?, ?)', [name.trim(), district || 'A地区']);
+    res.json({ id: lastInsertId(), name: name.trim(), district: district || 'A地区' });
   } catch (e) {
     if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'この現場名は既に存在します' });
     res.status(500).json({ error: e.message });
