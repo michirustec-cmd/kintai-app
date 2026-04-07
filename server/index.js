@@ -272,7 +272,6 @@ app.get('/api/export', (req, res) => {
 
 // Always serve static files from client/dist if it exists
 const distPath = path.join(__dirname, '..', 'client', 'dist');
-const fs = require('fs');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
   app.get('*', (req, res) => {
