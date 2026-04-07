@@ -33,9 +33,14 @@ function getSettings() {
 
 function calcRecord(r, settings) {
   const start = toMin(r.start_time);
-  const end = toMin(r.end_time);
+  let end = toMin(r.end_time);
   const { standardStart, standardEnd, standardHours, defaultBreak } = settings;
   const breakMin = r.break_minutes != null ? r.break_minutes : defaultBreak;
+
+  // 日をまたぐ場合（退勤時刻が出勤時刻より前 = 翌日）
+  if (end <= start) {
+    end += 24 * 60; // +24時間
+  }
 
   // 早出: 定時開始より前に出勤した分
   const earlyMinutes = Math.max(0, standardStart - start);

@@ -1,19 +1,30 @@
 const BASE = '/api';
 
-async function request(path, options = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'エラーが発生しました' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+async function request(path, options = {}, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(BASE + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'エラーが発生しました' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      // For blob responses (Excel export)
+      if (res.headers.get('content-type')?.includes('spreadsheetml')) {
+        return res;
+      }
+      return res.json();
+    } catch (e) {
+      // サーバーがスリープから復帰中の場合、リトライ
+      if (attempt < retries && (e.name === 'TypeError' || e.message.includes('Failed to fetch'))) {
+        await new Promise(r => setTimeout(r, 3000)); // 3秒待ってリトライ
+        continue;
+      }
+      throw e;
+    }
   }
-  // For blob responses (Excel export)
-  if (res.headers.get('content-type')?.includes('spreadsheetml')) {
-    return res;
-  }
-  return res.json();
 }
 
 // Employees

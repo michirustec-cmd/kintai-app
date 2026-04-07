@@ -20,8 +20,12 @@ function toMin(t) {
 
 function calcRow(r, settings) {
   const start = toMin(r.start_time);
-  const end = toMin(r.end_time);
+  let end = toMin(r.end_time);
   const breakMin = r.break_minutes != null ? r.break_minutes : settings.defaultBreak;
+  // 日をまたぐ場合
+  if (end <= start) {
+    end += 24 * 60;
+  }
   const workMinutes = (end - start) - breakMin;
   const earlyMinutes = Math.max(0, settings.standardStart - start);
   const overtimeMinutes = Math.max(0, end - settings.standardEnd);
