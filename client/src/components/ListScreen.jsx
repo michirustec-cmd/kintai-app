@@ -71,29 +71,9 @@ export default function ListScreen({ user, onNavigate, onEdit, onLogout, toast }
         {summary && summary.total_days > 0 && (
           <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
             <h2 className="text-sm text-gray-400 mb-2 font-medium">月次サマリー</h2>
-            <div className="grid grid-cols-3 gap-2 text-center mb-3">
-              <div>
-                <div className="text-2xl font-bold text-header">{summary.total_days}</div>
-                <div className="text-xs text-gray-400">出勤日数</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">{minutesToDisplay(summary.total_work_minutes)}</div>
-                <div className="text-xs text-gray-400">総労働時間</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-purple-600">{minutesToHours(summary.total_extra_minutes)}</div>
-                <div className="text-xs text-gray-400">時間外計</div>
-              </div>
-            </div>
-            <div className="flex justify-center gap-6 pt-2 border-t border-gray-100">
-              <div className="text-center">
-                <div className="text-lg font-bold text-orange-500">{minutesToHours(summary.total_early_minutes)}</div>
-                <div className="text-xs text-gray-400">早出</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-danger">{minutesToHours(summary.total_overtime_minutes)}</div>
-                <div className="text-xs text-gray-400">残業</div>
-              </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-header">{summary.total_days}</div>
+              <div className="text-xs text-gray-400">出勤日数</div>
             </div>
           </div>
         )}
@@ -110,27 +90,11 @@ export default function ListScreen({ user, onNavigate, onEdit, onLogout, toast }
                     {r.date.replace(/-/g, '/')} ({getDayOfWeek(r.date)})
                   </div>
                   <div className="text-sm text-primary mt-0.5">{r.site}</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {r.start_time} 〜 {r.end_time}
-                    <span className="ml-2">
-                      実働 {minutesToDisplay(r.work_minutes)}
-                    </span>
-                    {r.early_minutes > 0 && (
-                      <span className="ml-2 text-orange-500">
-                        早出 {minutesToHours(r.early_minutes)}
-                      </span>
-                    )}
-                    {r.overtime_minutes > 0 && (
-                      <span className="ml-2 text-danger">
-                        残業 {minutesToHours(r.overtime_minutes)}
-                      </span>
-                    )}
-                    {r.extra_total_minutes > 0 && (
-                      <span className="ml-2 text-purple-600 font-semibold">
-                        時間外計 {minutesToHours(r.extra_total_minutes)}
-                      </span>
-                    )}
-                  </div>
+                  {r.day_type === 'work' && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      {r.start_time} 〜 {r.end_time}
+                    </div>
+                  )}
                 </div>
               </div>
               {r.note && (
